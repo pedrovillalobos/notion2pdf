@@ -88,34 +88,73 @@ def convert_blocks_to_html(blocks, img_folder, notion_token):
         # Add more block types as needed
     return html
 
-def export_page_to_pdf(page_id, name_prefix="", parent_chain=None):
+def export_page_to_pdf(page_id, parent_chain=None):
     # Get page title
     page = notion.pages.retrieve(page_id)
     title = page['properties']['title']['title'][0]['plain_text']
     safe_title = sanitize_filename(title)
-    if parent_chain:
-        filename = "-".join(parent_chain + [safe_title]) + ".pdf"
-    else:
-        filename = f"{safe_title}.pdf"
-
-    output_pdf = os.path.join(OUTPUT_DIR, filename)
-    img_folder = os.path.join(OUTPUT_DIR, "images")
-    os.makedirs(img_folder, exist_ok=True)
-
-    print(f"Exporting: {filename}")
 
     blocks = get_blocks(page_id)
-    html = convert_blocks_to_html(blocks, img_folder, NOTION_TOKEN)
-    # Add a title to the top
-    html = f"<h1>{title}</h1>\n" + html
-
-    HTML(string=html, base_url='.').write_pdf(output_pdf)
-
-    # Handle child pages recursively
+    # Find all child pages (for recursion)
     child_pages = get_child_pages(blocks)
+
+    # Determine if this page has "real" content (not just empty/child_page blocks)
+    non_empty_blocks = [
+        b for b in blocks
+        if not (b["type"] == "child_page" or (
+            b["type"] in ["paragraph", "heading_1", "heading_2", "heading_3"]
+            and not b[b["type"]]["rich_text"]
+        ))
+    ]
+    has_content = len(non_empty_blocks) > 0
+
+    # Prepare chain for naming/folder
+    if parent_chain:
+        chain = parent_chain + [safe_title]
+    else:
+        chain = [safe_title]
+
+    # List to collect which PDFs will be created (for folder pruning)
+    created_pdfs = []
+
+    # Export this page if it has content
+    if has_content:
+        pdf_filename = "-".join(chain) + ".pdf"
+        # Folder path for this page's level
+        if len(chain) > 1:
+            folder = os.path.join(OUTPUT_DIR, *chain[:-1])
+        else:
+            folder = os.path.join(OUTPUT_DIR, safe_title)
+        os.makedirs(folder, exist_ok=True)
+
+        output_pdf = os.path.join(folder, pdf_filename)
+        img_folder = os.path.join(OUTPUT_DIR, "images")
+        os.makedirs(img_folder, exist_ok=True)
+
+        print(f"Exporting: {os.path.relpath(output_pdf, OUTPUT_DIR)}")
+        html = convert_blocks_to_html(blocks, img_folder, NOTION_TOKEN)
+        html = f"<h1>{title}</h1>\n" + html
+        HTML(string=html, base_url='.').write_pdf(output_pdf)
+
+        created_pdfs.append(output_pdf)
+
+    # Always process child pages recursively
     for child in child_pages:
         child_id = child["id"]
-        export_page_to_pdf(child_id, name_prefix=safe_title, parent_chain=(parent_chain or []) + [safe_title])
+        # Recursive call: pass the current chain for naming/folders
+        child_pdfs = export_page_to_pdf(child_id, chain)
+        created_pdfs.extend(child_pdfs)
+
+    # If this is a container page (no PDF exported here, only children), create folder only if children PDFs exist
+    if not has_content and created_pdfs:
+        # Only create folder if it doesn't exist yet (for child PDFs)
+        folder = os.path.join(OUTPUT_DIR, *chain)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+    # If not a container, no folder is created
+
+    # Return list of PDFs created under this node and its children (for parent folder logic)
+    return created_pdfs
 
 if __name__ == "__main__":
     Path(OUTPUT_DIR).mkdir(exist_ok=True)
