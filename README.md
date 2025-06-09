@@ -1,2 +1,2 @@
 # notion2pdf
-A simple Notion pages to pdf file using Python
+A simple python script to export all notion pages and child into individual pdf files
