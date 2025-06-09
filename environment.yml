@@ -1,0 +1,13 @@
+name: notion2pdf
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - notion-client
+      - weasyprint
+      - requests
+      - markdownify
+      - python-dotenv
