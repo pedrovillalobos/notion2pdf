@@ -85,3 +85,10 @@ These are installed automatically with Conda/pip:
 
 • PDFs are exported to the output/ folder.
 • Add output/ and .env to your .gitignore to avoid pushing them to git.
+
+---
+
+## Disclaimer
+
+This script is provided **as is**, without warranty of any kind. Use it at your own risk.  
+I am not responsible or liable for any issues, data loss, or other consequences resulting from the use of this script.
